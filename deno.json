@@ -1,0 +1,35 @@
+{
+  "tasks": {
+    "start": "deno task dev:api & deno task dev:vite",
+    "dev:vite": "deno run -A --node-modules-dir npm:vite",
+    "dev:api": "deno run --allow-env --allow-read --allow-net api/main.ts",
+    "build": "deno run -A --node-modules-dir npm:vite build",
+    "preview": "deno run -A --node-modules-dir npm:vite preview",
+    "serve": "deno run --allow-net --allow-read jsr:@std/http@1/file-server dist/"
+  },
+  "compilerOptions": {
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "jsxImportSourceTypes": "@types/react"
+  },
+  "imports": {
+    "@anatine/zod-mock": "npm:@anatine/zod-mock@^3.13.4",
+    "@deno/vite-plugin": "npm:@deno/vite-plugin@^1.0.0",
+    "@oak/oak": "jsr:@oak/oak@^17.1.3",
+    "@tajpouria/cors": "jsr:@tajpouria/cors@^1.2.1",
+    "@tanstack/react-table": "npm:@tanstack/react-table@^8.20.5",
+    "@tanstack/react-virtual": "npm:@tanstack/react-virtual@^3.11.0",
+    "@types/lodash": "npm:@types/lodash@^4.17.13",
+    "@types/react": "npm:@types/react@^18.3.12",
+    "@types/react-dom": "npm:@types/react-dom@^18.3.1",
+    "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^4.3.4",
+    "lodash": "npm:lodash@^4.17.21",
+    "react": "npm:react@^18.3.1",
+    "react-dom": "npm:react-dom@^18.3.1",
+    "sift": "npm:sift@^17.1.3",
+    "swr": "npm:swr@^2.2.5",
+    "vite": "npm:vite@^6.0.1",
+    "zod": "npm:zod@^3.23.8"
+  }
+}
