@@ -13,11 +13,21 @@ import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import type { Player } from "./schemas.ts";
 import { getPlayers } from "./getPlayers.ts";
 
+/**
+ * Represents the state of the buffer and visible windows for virtual scrolling.
+ */
 type WindowState = {
+	/**
+	 * The buffer window represents the range of data currently fetched and stored locally.
+	 */
 	bufferWindow: {
 		start: number;
 		end: number;
 	};
+	/**
+	 * The visible window represents the range of data currently visible to the user.
+	 * Includes previous start/end positions for comparison.
+	 */
 	visibleWindow: {
 		start: number;
 		end: number;
@@ -162,6 +172,13 @@ export default function Table() {
 		overscan: 0,
 	});
 
+	/**
+	 * Handles the scroll event for the table body.
+	 * Calculates the need for updating buffer and visible windows based on scroll position.
+	 * Debounced to prevent excessive updates during rapid scrolling.
+	 *
+	 * @param scrollPos - The current vertical scroll position (in pixels).
+	 */
 	const handleScroll = useCallback(
 		debounce((scrollPos: number) => {
 			const isScrollingDown = scrollPos > prevScrollPos.current;
@@ -269,7 +286,10 @@ export default function Table() {
 	);
 
 	/**
-	 * Ensure we don't see a view-blocking spinner more than once.
+	 * Effect hook to update the total number of items in the dataset.
+	 * Sets the total count from the data fetched on the first load.
+	 *
+	 * Dependency array: [data]
 	 */
 	useEffect(() => {
 		if (data?.data?.total_count && isFirstLoad.current) {
@@ -279,7 +299,10 @@ export default function Table() {
 	}, [data]);
 
 	/**
-	 * Is the flash related to no data existing?
+	 * Effect hook to update the buffer window shadow with new data when data or window state changes.
+	 * Manages the data displayed within the current buffer window using the data fetched.
+	 *
+	 * Dependency array: [data, windowState]
 	 */
 	useEffect(() => {
 		if (data?.data?.data.length) {
