@@ -12,6 +12,11 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import type { Player } from "./schemas.ts";
 import { getPlayers } from "./getPlayers.ts";
+import Datagrid from "./components/Datagrid.tsx";
+import GridCell from "./components/GridCell.tsx";
+import RowGroup from "./components/RowGroup.tsx";
+import Row from "./components/Row.tsx";
+import ColumnHeader from "./components/ColumnHeader.tsx";
 
 /**
  * Represents the state of the buffer and visible windows for virtual scrolling.
@@ -38,9 +43,11 @@ type WindowState = {
 
 const columnHelper = createColumnHelper<Player>();
 
+const visibleAreaHeight = globalThis.innerHeight;
 const chunkSize = 200;
-const visibleAreaSize = Math.floor(500 / 20);
-const rowHeight = 20;
+const visibleAreaSize = Math.floor(visibleAreaHeight / 20);
+const rowHeight = 28;
+const bufferRowsAboveAndBelow = Math.floor((chunkSize - visibleAreaSize) / 2);
 let bufferWindowShadow: Player[] = [];
 
 export default function Table() {
@@ -164,10 +171,10 @@ export default function Table() {
 	});
 	const rows = table.getCoreRowModel().rows;
 	const isFirstLoad = useRef(true);
-	const tableBodyRef = useRef<HTMLDivElement>(null);
+	const containerRef = useRef<HTMLDivElement>(null);
 	const virtualizer = useVirtualizer({
 		count: total,
-		getScrollElement: () => tableBodyRef.current,
+		getScrollElement: () => containerRef.current,
 		estimateSize: () => rowHeight,
 		overscan: 0,
 	});
@@ -185,9 +192,6 @@ export default function Table() {
 			const isScrollingUp = scrollPos < prevScrollPos.current;
 			const visibleAreaWindowStart = Math.floor(scrollPos / rowHeight);
 			const visibleAreaWindowEnd = visibleAreaWindowStart + visibleAreaSize;
-			const bufferRowsAboveAndBelow = Math.floor(
-				(chunkSize - visibleAreaSize) / 2,
-			);
 			let updatedBufferStart = visibleAreaWindowStart - bufferRowsAboveAndBelow;
 
 			if (updatedBufferStart < 0) {
@@ -299,17 +303,19 @@ export default function Table() {
 	}, [data]);
 
 	/**
-	 * Effect hook to update the buffer window shadow with new data when data or window state changes.
-	 * Manages the data displayed within the current buffer window using the data fetched.
-	 *
+	 * The buffer window requires synchronization once the incoming dataset arrives. Otherwise, there will be a noticable flicker
+	 * on-screen. I disabled React's strict mode, so this issue is unrelated to additional re-renders. It seems as if an additional
+	 * scroll callback is fired unintentially after the initial update to the buffer window's dataset, so we need to do it again here.
+	 * I don't get it.
 	 * Dependency array: [data, windowState]
 	 */
 	useEffect(() => {
 		if (data?.data?.data.length) {
-			const incomingRowsAbove = data.data.data.slice(0, 87);
-			const visibleAreaWindowEnd = 87 + visibleAreaSize;
+			const offset = bufferRowsAboveAndBelow;
+			const incomingRowsAbove = data.data.data.slice(0, offset);
+			const visibleAreaWindowEnd = offset + visibleAreaSize;
 			const incomingRowsVisible = data.data.data.slice(
-				87,
+				offset,
 				visibleAreaWindowEnd,
 			);
 			const incomingRowsBelow = data.data.data.slice(visibleAreaWindowEnd);
@@ -318,6 +324,7 @@ export default function Table() {
 				...incomingRowsVisible,
 				...incomingRowsBelow,
 			];
+			// bufferWindowShadow = data.data.data;
 		}
 	}, [data, windowState]);
 
@@ -335,107 +342,84 @@ export default function Table() {
 	}
 
 	return (
-		<div>
-			<div style={{ display: "block" }}>
-				<div>
+		<div
+			style={{ overflow: "auto", height: "90vh", width: "100vw" }}
+			ref={containerRef}
+			onScroll={(event) => handleScroll(event.currentTarget.scrollTop)}
+		>
+			<Datagrid>
+				<RowGroup aria-label="datagrid header" element="thead">
 					{table.getHeaderGroups().map((headerGroup) => (
-						<div
-							style={{ display: "flex", width: "100%" }}
+						<Row
+							style={{
+								height: `${rowHeight}px`,
+							}}
 							key={headerGroup.id}
 						>
 							{headerGroup.headers.map((header) => {
 								return (
-									<div
-										key={header.id}
-										style={{
-											flex: "1",
-											maxWidth: "100px",
-											overflow: "hidden",
-											textOverflow: "ellipsis",
-										}}
-									>
+									<ColumnHeader key={header.id}>
 										{flexRender(
 											header.column.columnDef.header,
 											header.getContext(),
 										)}
-									</div>
+									</ColumnHeader>
 								);
 							})}
-						</div>
+						</Row>
 					))}
-				</div>
-				<div
-					style={{
-						height: "500px",
-						overflow: "auto",
-						width: "100%",
-					}}
-					onScroll={(event) => handleScroll(event.currentTarget.scrollTop)}
+				</RowGroup>
+				<RowGroup
+					style={{ height: `${virtualizer.getTotalSize()}px` }}
+					element="tbody"
+					aria-label="datagrid body"
 				>
-					<div
-						style={{
-							width: "100%",
-							height: `${virtualizer.getTotalSize()}px`,
-						}}
-						ref={tableBodyRef}
-					>
-						{virtualizer.getVirtualItems().map((virtualRow, _index) => {
-							/**
-							 * The data returned from the server is a "window"
-							 * into the total population, so we'll need to calculate
-							 * the offset between the window and the population.
-							 */
-							const index = virtualRow.index - windowState.bufferWindow.start;
-							const row = rows[index];
+					{virtualizer.getVirtualItems().map((virtualRow, _index) => {
+						/**
+						 * The data returned from the server is a "window"
+						 * into the total population, so we'll need to calculate
+						 * the offset between the window and the population.
+						 */
+						const index = virtualRow.index - windowState.bufferWindow.start;
+						const row = rows[index];
 
-							if (!row || !row?.original) {
-								return (
-									<div
-										style={{ height: `${rowHeight}px` }}
-										data-virtual-index={virtualRow.index}
-										key={virtualRow.key}
-									/>
-								);
-							}
-
+						if (!row || !row?.original) {
 							return (
-								<div
-									data-row-index={virtualRow.index}
+								<Row
+									style={{ height: `${rowHeight}px` }}
+									data-virtual-index={virtualRow.index}
 									key={virtualRow.key}
-									style={{
-										width: "100%",
-										display: "flex",
-										height: `${virtualRow.size}px`,
-										transform: `translateY(${
-											virtualRow.start - _index * virtualRow.size
-										}px)`,
-									}}
-								>
-									{virtualizer.getVirtualItems().length &&
-										row.getVisibleCells().map((cell) => {
-											return (
-												<div
-													style={{
-														flex: "1",
-														maxWidth: "100px",
-														overflow: "hidden",
-														textOverflow: "ellipsis",
-													}}
-													key={cell.id}
-												>
-													{flexRender(
-														cell.column.columnDef.cell,
-														cell.getContext(),
-													)}
-												</div>
-											);
-										})}
-								</div>
+								/>
 							);
-						})}
-					</div>
-				</div>
-			</div>
+						}
+
+						return (
+							<Row
+								data-row-index={virtualRow.index}
+								key={virtualRow.key}
+								style={{
+									height: `${virtualRow.size}px`,
+									transform: `translateY(${
+										virtualRow.start - _index * virtualRow.size
+									}px)`,
+								}}
+							>
+								{virtualizer.getVirtualItems().length &&
+									row.getVisibleCells().map((cell) => {
+										return (
+											<GridCell key={cell.id}>
+												{flexRender(
+													cell.column.columnDef.cell,
+													cell.getContext(),
+												)}
+											</GridCell>
+										);
+									})}
+							</Row>
+						);
+					})}
+				</RowGroup>
+			</Datagrid>
 		</div>
 	);
 }
