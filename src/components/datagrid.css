@@ -1,0 +1,72 @@
+/* 
+https://piccalil.li/blog/styling-tables-the-modern-css-way/
+*/
+
+body {
+  box-sizing: border-box;
+}
+
+table {
+  border-spacing: 2px;
+  text-indent: 0;
+  line-height: 1.5;
+  text-align: left;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+table, thead, tbody {
+  display: block;
+  width: 100%;
+}
+
+tbody {
+  position: relative;
+}
+
+tr {
+	border-bottom: 1px solid;
+  display: flex;
+  width: 100%;
+}
+
+th,
+td {
+  border: 1px solid lightgrey;
+	padding: 0.25rem 0.75rem;
+  flex-grow: 1;
+  min-width: 150px;
+}
+
+td {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+th,
+caption {
+	text-align: start;
+}
+
+tr td:first-of-type, tr th:first-of-type {
+  text-align: start;
+  min-width: 200px;
+}
+
+thead th:not(:first-child),
+td {
+	text-align: end;
+}
+
+thead {
+  border-block-end: 2px solid;
+  color: black;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+thead th {
+  background: whitesmoke;
+}
