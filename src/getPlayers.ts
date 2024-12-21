@@ -18,8 +18,9 @@ export type Success = {
 	error: null;
 };
 type Fail = { data: null; error: Error };
+type Result = Success | Fail;
 
-export async function getPlayers(args: RequestArgs): Promise<Success | Fail> {
+export async function getPlayers(args: RequestArgs): Promise<Result> {
 	try {
 		const requestPayload = RequestPayloadSchema.parse(args);
 		const response = await fetch("/api/search", {
