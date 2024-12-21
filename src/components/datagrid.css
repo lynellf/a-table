@@ -26,16 +26,12 @@ tbody {
 
 tr {
 	border-bottom: 1px solid;
-  display: flex;
-  width: 100%;
 }
 
 th,
 td {
   border: 1px solid lightgrey;
 	padding: 0.25rem 0.75rem;
-  flex-grow: 1;
-  min-width: 150px;
 }
 
 td {
@@ -51,7 +47,6 @@ caption {
 
 tr td:first-of-type, tr th:first-of-type {
   text-align: start;
-  min-width: 200px;
 }
 
 thead th:not(:first-child),
@@ -69,4 +64,32 @@ thead {
 
 thead th {
   background: whitesmoke;
+  position: relative;
+}
+
+.column-resize-handle {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  right: 0;
+  width: 5px;
+  background: rgba(0, 0, 0, 0.5);
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+}
+
+.column-resize-handle.isResizing {
+  background: blue;
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .column-resize-handle {
+    opacity: 0;
+  }
+
+  *:hover > .column-resize-handle {
+    opacity: 1;
+  }
 }

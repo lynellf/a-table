@@ -131,6 +131,11 @@ export default function Table() {
 	const table = useReactTable({
 		columns,
 		data: players,
+		defaultColumn: {
+			minSize: 60,
+			maxSize: 800,
+		},
+		columnResizeMode: "onChange",
 		getCoreRowModel: getCoreRowModel(),
 		autoResetExpanded: false,
 		autoResetAll: false,
@@ -170,6 +175,23 @@ export default function Table() {
 		[size, setSize],
 	);
 
+	/**
+	 * Instead of calling `column.getSize()` on every render for every header
+	 * and especially every data cell (very expensive),
+	 * we will calculate all column sizes at once at the root table level in a useMemo
+	 * and pass the column sizes down as CSS variables to the <table> element.
+	 */
+	const columnSizeVars = useMemo(() => {
+		const headers = table.getFlatHeaders();
+		const colSizes: Record<string, number> = {};
+		for (let i = 0; i < headers.length; i++) {
+			const header = headers[i];
+			colSizes[`--header-${header.id}-size`] = header.getSize();
+			colSizes[`--col-${header.column.id}-size`] = header.column.getSize();
+		}
+		return colSizes;
+	}, [table.getState().columnSizingInfo, table.getState().columnSizing]);
+
 	if (error) {
 		return (
 			<div>
@@ -203,7 +225,7 @@ export default function Table() {
 					)
 				}
 			>
-				<Datagrid>
+				<Datagrid style={{ ...columnSizeVars }}>
 					<RowGroup aria-label="datagrid header" element="thead">
 						{table.getHeaderGroups().map((headerGroup) => (
 							<Row
@@ -214,11 +236,20 @@ export default function Table() {
 							>
 								{headerGroup.headers.map((header) => {
 									return (
-										<ColumnHeader key={header.id}>
-											{flexRender(
-												header.column.columnDef.header,
-												header.getContext(),
-											)}
+										<ColumnHeader
+											style={{
+												minWidth: `calc(var(--header-${header?.id}-size) * 1px)`,
+												maxWidth: `calc(var(--col-${header.id}-size) * 1px)`,
+											}}
+											key={header.id}
+										>
+											<div>
+												{flexRender(
+													header.column.columnDef.header,
+													header.getContext(),
+												)}
+											</div>
+											<div className="column-resize-handle" />
 										</ColumnHeader>
 									);
 								})}
@@ -263,7 +294,13 @@ export default function Table() {
 									{virtualizer.getVirtualItems().length &&
 										row.getVisibleCells().map((cell) => {
 											return (
-												<GridCell key={cell.id}>
+												<GridCell
+													style={{
+														minWidth: `calc(var(--col-${cell.column.id}-size) * 1px)`,
+														maxWidth: `calc(var(--col-${cell.column.id}-size) * 1px)`,
+													}}
+													key={cell.id}
+												>
 													{flexRender(
 														cell.column.columnDef.cell,
 														cell.getContext(),
