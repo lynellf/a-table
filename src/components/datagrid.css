@@ -7,11 +7,10 @@ body {
 }
 
 table {
-  border-spacing: 2px;
   text-indent: 0;
   line-height: 1.5;
   text-align: left;
-  border-collapse: collapse;
+  border-spacing: 0;
   table-layout: fixed;
 }
 
@@ -79,7 +78,7 @@ thead th {
   touch-action: none;
 }
 
-.column-resize-handle.isResizing {
+.column-resize-handle.is-resizing {
   background: blue;
   opacity: 1;
 }

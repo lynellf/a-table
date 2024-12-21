@@ -1,15 +1,17 @@
 // @deno-types="@types/lodash"
 import { debounce } from "lodash";
-import useSWRInfinite from "swr/infinite";
+import type { Virtualizer } from "@tanstack/virtual-core";
 import {
 	useReactTable,
 	createColumnHelper,
 	getCoreRowModel,
 	flexRender,
+	type Row as TRow,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 // @deno-types="@types/react"
-import { useMemo, useRef, useCallback } from "react";
+import { useMemo, useRef, useCallback, memo } from "react";
+import useSWRInfinite from "swr/infinite";
 import type { Player } from "./schemas.ts";
 import { getPlayers } from "./getPlayers.ts";
 import Datagrid from "./components/Datagrid.tsx";
@@ -33,6 +35,15 @@ const fetchData = async (indexStr: string) => {
 	}
 	return data;
 };
+
+/**
+ * Memoizing the table body gives us a pathway for
+ * smooth column re-sizing.
+ */
+const MemoedTableBody = memo(
+	TableBody,
+	(prev, next) => prev.rows === next.rows,
+);
 
 export default function Table() {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -190,7 +201,11 @@ export default function Table() {
 			colSizes[`--col-${header.column.id}-size`] = header.column.getSize();
 		}
 		return colSizes;
-	}, [table.getState().columnSizingInfo, table.getState().columnSizing]);
+	}, [
+		table.getState().columnSizingInfo,
+		table.getState().columnSizing,
+		table.getFlatHeaders(),
+	]);
 
 	if (error) {
 		return (
@@ -249,71 +264,97 @@ export default function Table() {
 													header.getContext(),
 												)}
 											</div>
-											<div className="column-resize-handle" />
+											<div
+												className={`column-resize-handle ${header.column.getIsResizing() ? "is-resizing" : ""}`}
+												onDoubleClick={() => header.column.resetSize()}
+												onMouseDown={header.getResizeHandler()}
+											/>
 										</ColumnHeader>
 									);
 								})}
 							</Row>
 						))}
 					</RowGroup>
-					<RowGroup
-						style={{ height: `${virtualizer.getTotalSize()}px` }}
-						element="tbody"
-						aria-label="datagrid body"
-					>
-						{virtualizer.getVirtualItems().map((virtualRow, _index) => {
-							/**
-							 * The data returned from the server is a "window"
-							 * into the total population, so we'll need to calculate
-							 * the offset between the window and the population.
-							 */
-							const index = virtualRow.index;
-							const row = rows[index];
-
-							if (!row || !row?.original) {
-								return (
-									<Row
-										style={{ height: `${ROW_HEIGHT}px` }}
-										data-virtual-index={virtualRow.index}
-										key={virtualRow.key}
-									/>
-								);
-							}
-
-							return (
-								<Row
-									data-row-index={virtualRow.index}
-									key={virtualRow.key}
-									style={{
-										height: `${virtualRow.size}px`,
-										transform: `translateY(${
-											virtualRow.start - _index * virtualRow.size
-										}px)`,
-									}}
-								>
-									{virtualizer.getVirtualItems().length &&
-										row.getVisibleCells().map((cell) => {
-											return (
-												<GridCell
-													style={{
-														minWidth: `calc(var(--col-${cell.column.id}-size) * 1px)`,
-														maxWidth: `calc(var(--col-${cell.column.id}-size) * 1px)`,
-													}}
-													key={cell.id}
-												>
-													{flexRender(
-														cell.column.columnDef.cell,
-														cell.getContext(),
-													)}
-												</GridCell>
-											);
-										})}
-								</Row>
-							);
-						})}
-					</RowGroup>
+					{/* {newFunction(virtualizer, rows)} */}
+					{table.getState().columnSizingInfo.isResizingColumn ? (
+						<MemoedTableBody virtualizer={virtualizer} rows={rows} />
+					) : (
+						<TableBody virtualizer={virtualizer} rows={rows} />
+					)}
 				</Datagrid>
 			</div>
 		</div>
+	);
+}
+
+type TableBodyProps = {
+	virtualizer: Virtualizer<HTMLDivElement, Element>;
+	rows: TRow<unknown>[];
+};
+
+function TableBody(props: TableBodyProps) {
+	const { virtualizer, rows } = props;
+	return (
+		<RowGroup
+			style={{ height: `${virtualizer.getTotalSize()}px` }}
+			element="tbody"
+			aria-label="datagrid body"
+		>
+			{virtualizer.getVirtualItems().map((virtualRow, _index) => {
+				/**
+				 * The data returned from the server is a "window"
+				 * into the total population, so we'll need to calculate
+				 * the offset between the window and the population.
+				 */
+				const index = virtualRow.index;
+				const row = rows[index];
+
+				if (!row) {
+					return (
+						<Row
+							style={{
+								height: `${ROW_HEIGHT}px`,
+							}}
+							data-virtual-index={virtualRow.index}
+							key={virtualRow.key}
+						/>
+					);
+				}
+
+				return (
+					<Row
+						data-row-index={virtualRow.index}
+						key={virtualRow.key}
+						style={{
+							height: `${virtualRow.size}px`,
+							/**
+							 * transform: translateY is required for a smooth scrolling experience.
+							 * Witout this property value, the browser has to perform a significant number of
+							 * layout calculations. With the property value, we can reduce the number of calculations.
+							 * To learn more, see:
+							 * https://chatgpt.com/c/6766ea32-cd88-800b-85bd-d31e32419d5b
+							 */
+							transform: `translateY(${virtualRow.start - _index * virtualRow.size}px)`,
+						}}
+					>
+						{virtualizer.getVirtualItems().length &&
+							row.getVisibleCells().map((cell) => {
+								return (
+									<GridCell
+										style={{
+											borderBottom: "1px solid",
+											minWidth: `calc(var(--col-${cell.column.id}-size) * 1px)`,
+											maxWidth: `calc(var(--col-${cell.column.id}-size) * 1px)`,
+										}}
+										key={cell.id}
+									>
+										{flexRender(cell.column.columnDef.cell, cell.getContext())}
+									</GridCell>
+								);
+							})}
+					</Row>
+				);
+			})}
+		</RowGroup>
 	);
 }
