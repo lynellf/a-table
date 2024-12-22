@@ -14,6 +14,10 @@ table {
   table-layout: fixed;
 }
 
+table * {
+  transform: translateZ(0);
+}
+
 table, thead, tbody {
   display: block;
   width: 100%;
@@ -21,6 +25,7 @@ table, thead, tbody {
 
 tbody {
   position: relative;
+  
 }
 
 tr {
@@ -39,16 +44,11 @@ td {
   white-space: nowrap;
 }
 
-th,
-caption {
-	text-align: start;
-}
-
-tr td:first-of-type, tr th:first-of-type {
+tr td:first-of-type {
   text-align: start;
 }
 
-thead th:not(:first-child),
+thead th,
 td {
 	text-align: end;
 }
@@ -64,6 +64,7 @@ thead {
 thead th {
   background: whitesmoke;
   position: relative;
+  user-select: none;
 }
 
 .column-resize-handle {
@@ -90,5 +91,44 @@ thead th {
 
   *:hover > .column-resize-handle {
     opacity: 1;
+  }
+}
+
+
+/* 
+ Custom Drag Handle
+ See: https://jsfiddle.net/7Ldmmrjd/2/
+*/
+.drag-handle {
+  display: inline-block;
+  width: min(20%, 20px);
+  height: 8px;
+}
+
+.drag-handle:hover {
+  cursor: grab;
+}
+
+.drag-handle,
+.drag-handle::before {
+  background-image: radial-gradient(black 40%, transparent 40%);
+  background-size: 4px 4px;
+  background-position: 0 100%;
+  background-repeat: repeat-x;
+}
+
+.drag-handle::before {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 33%;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+
+  .content-area {
+    flex: 1;
   }
 }
