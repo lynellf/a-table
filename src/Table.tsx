@@ -1,24 +1,41 @@
 // @deno-types="@types/lodash"
-import { debounce } from "lodash";
+import { debounce, over } from "lodash";
 import type { Virtualizer } from "@tanstack/virtual-core";
 import {
 	useReactTable,
 	createColumnHelper,
 	getCoreRowModel,
-	flexRender,
 	type Row as TRow,
 } from "@tanstack/react-table";
+import {
+	DndContext,
+	KeyboardSensor,
+	MouseSensor,
+	TouchSensor,
+	closestCenter,
+	type DragEndEvent,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
+import {
+	arrayMove,
+	SortableContext,
+	horizontalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { useVirtualizer } from "@tanstack/react-virtual";
 // @deno-types="@types/react"
-import { useMemo, useRef, useCallback, memo } from "react";
+import { useMemo, useRef, useCallback, memo, useState, useEffect } from "react";
 import useSWRInfinite from "swr/infinite";
 import type { Player } from "./schemas.ts";
 import { getPlayers } from "./getPlayers.ts";
 import Datagrid from "./components/Datagrid.tsx";
-import GridCell from "./components/GridCell.tsx";
 import RowGroup from "./components/RowGroup.tsx";
 import Row from "./components/Row.tsx";
-import ColumnHeader from "./components/ColumnHeader.tsx";
+import DraggableHeader from "./components/DraggableHeader.tsx";
+import DragAlongCell from "./components/DragAlongCell.tsx";
+
+type UniqueId = string | number;
 
 const PAGE_SIZE = 200;
 const ROW_HEIGHT = 28;
@@ -139,6 +156,10 @@ export default function Table() {
 		],
 		[],
 	);
+	const [columnOrder, setColumnOrder] = useState<string[]>(() =>
+		columns.map((c) => c.id as string),
+	);
+	const [isDragging, setIsDragging] = useState<boolean>(false);
 	const table = useReactTable({
 		columns,
 		data: players,
@@ -146,6 +167,10 @@ export default function Table() {
 			minSize: 60,
 			maxSize: 800,
 		},
+		state: {
+			columnOrder,
+		},
+		onColumnOrderChange: setColumnOrder,
 		columnResizeMode: "onChange",
 		getCoreRowModel: getCoreRowModel(),
 		autoResetExpanded: false,
@@ -168,6 +193,8 @@ export default function Table() {
 	 *
 	 * @param scrollPos - The current vertical scroll position (in pixels).
 	 */
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: false positive
 	const handleScroll = useCallback(
 		debounce(
 			(scrollHeight: number, scrollTop: number, clientHeight: number) => {
@@ -186,12 +213,30 @@ export default function Table() {
 		[size, setSize],
 	);
 
+	const handleDragEnd = useCallback((activeId: UniqueId, overId?: UniqueId) => {
+		if (activeId !== overId && overId) {
+			setColumnOrder((columnOrder) => {
+				const oldIndex = columnOrder.indexOf(activeId.toString());
+				const newIndex = columnOrder.indexOf(overId.toString());
+				return arrayMove(columnOrder, oldIndex, newIndex); //this is just a splice util
+			});
+		}
+	}, []);
+
+	const sensors = useSensors(
+		useSensor(MouseSensor, {}),
+		useSensor(TouchSensor, {}),
+		useSensor(KeyboardSensor, {}),
+	);
+
 	/**
 	 * Instead of calling `column.getSize()` on every render for every header
 	 * and especially every data cell (very expensive),
 	 * we will calculate all column sizes at once at the root table level in a useMemo
 	 * and pass the column sizes down as CSS variables to the <table> element.
 	 */
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: false positive
 	const columnSizeVars = useMemo(() => {
 		const headers = table.getFlatHeaders();
 		const colSizes: Record<string, number> = {};
@@ -207,6 +252,10 @@ export default function Table() {
 		table.getFlatHeaders(),
 	]);
 
+	useEffect(() => {
+		console.log({ isDragging });
+	}, [isDragging]);
+
 	if (error) {
 		return (
 			<div>
@@ -221,69 +270,67 @@ export default function Table() {
 	}
 
 	return (
-		<div style={{ height: "100vh", width: "100vw", position: "relative" }}>
-			<div
-				style={{
-					overflow: "auto",
-					position: "absolute",
-					height: "100%",
-					width: "100%",
-					top: "0",
-					left: "0",
-				}}
-				ref={containerRef}
-				onScroll={(event) =>
-					handleScroll(
-						event.currentTarget.scrollTop,
-						event.currentTarget.offsetTop,
-						event.currentTarget.clientHeight,
-					)
-				}
-			>
-				<Datagrid style={{ ...columnSizeVars }}>
-					<RowGroup aria-label="datagrid header" element="thead">
-						{table.getHeaderGroups().map((headerGroup) => (
-							<Row
-								style={{
-									height: `${ROW_HEIGHT}px`,
-								}}
-								key={headerGroup.id}
-							>
-								{headerGroup.headers.map((header) => {
-									return (
-										<ColumnHeader
-											style={{
-												minWidth: `calc(var(--header-${header?.id}-size) * 1px)`,
-												maxWidth: `calc(var(--col-${header.id}-size) * 1px)`,
-											}}
-											key={header.id}
-										>
-											<div>
-												{flexRender(
-													header.column.columnDef.header,
-													header.getContext(),
-												)}
-											</div>
-											<div
-												className={`column-resize-handle ${header.column.getIsResizing() ? "is-resizing" : ""}`}
-												onDoubleClick={() => header.column.resetSize()}
-												onMouseDown={header.getResizeHandler()}
-											/>
-										</ColumnHeader>
-									);
-								})}
-							</Row>
-						))}
-					</RowGroup>
-					{/* {newFunction(virtualizer, rows)} */}
-					{table.getState().columnSizingInfo.isResizingColumn ? (
-						<MemoedTableBody virtualizer={virtualizer} rows={rows} />
-					) : (
-						<TableBody virtualizer={virtualizer} rows={rows} />
-					)}
-				</Datagrid>
+		<DndContext
+			collisionDetection={closestCenter}
+			modifiers={[restrictToHorizontalAxis]}
+			onDragStart={() => setIsDragging(true)}
+			onDragEnd={(event) => {
+				handleDragEnd(event.active.id, event?.over?.id);
+				setIsDragging(false);
+			}}
+			sensors={sensors}
+		>
+			<div style={{ height: "100vh", width: "100vw", position: "relative" }}>
+				<div
+					style={{
+						overflow: isDragging ? "hidden" : "auto",
+						position: "absolute",
+						height: "100%",
+						width: "100%",
+						top: "0",
+						left: "0",
+					}}
+					ref={containerRef}
+					onScroll={(event) =>
+						handleScroll(
+							event.currentTarget.scrollTop,
+							event.currentTarget.offsetTop,
+							event.currentTarget.clientHeight,
+						)
+					}
+				>
+					<Datagrid style={{ ...columnSizeVars }}>
+						<RowGroup aria-label="datagrid header" element="thead">
+							{table.getHeaderGroups().map((headerGroup) => (
+								<Row
+									style={{
+										height: `${ROW_HEIGHT}px`,
+									}}
+									key={headerGroup.id}
+								>
+									<SortableContext
+										items={columnOrder}
+										strategy={horizontalListSortingStrategy}
+									>
+										{headerGroup.headers.map((header) => {
+											return (
+												<DraggableHeader header={header} key={header.id} />
+											);
+										})}
+									</SortableContext>
+								</Row>
+							))}
+						</RowGroup>
+						{/* Memoizing the table body gives us a pathway for smooth column resizing. */}
+						{table.getState().columnSizingInfo.isResizingColumn ? (
+							<MemoedTableBody virtualizer={virtualizer} rows={rows} />
+						) : (
+							<TableBody virtualizer={virtualizer} rows={rows} />
+						)}
+					</Datagrid>
+				</div>
 			</div>
-		</div>
+		</DndContext>
 	);
 }
 
@@ -339,18 +386,7 @@ function TableBody(props: TableBodyProps) {
 					>
 						{virtualizer.getVirtualItems().length &&
 							row.getVisibleCells().map((cell) => {
-								return (
-									<GridCell
-										style={{
-											borderBottom: "1px solid",
-											minWidth: `calc(var(--col-${cell.column.id}-size) * 1px)`,
-											maxWidth: `calc(var(--col-${cell.column.id}-size) * 1px)`,
-										}}
-										key={cell.id}
-									>
-										{flexRender(cell.column.columnDef.cell, cell.getContext())}
-									</GridCell>
-								);
+								return <DragAlongCell cell={cell} key={cell.id} />;
 							})}
 					</Row>
 				);
