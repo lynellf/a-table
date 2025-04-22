@@ -61,3 +61,32 @@ export const PlayerSchema = z.object({
 });
 
 export type Player = z.infer<typeof PlayerSchema>;
+
+export const RegionsSchema = z.array(
+	z.object({
+		Region: z.string(),
+		Country: z.string(),
+		Category: z.string(),
+		totalCount: z.number().int(),
+	}),
+);
+
+export const RegionsQuerySchema = z.object({
+	column: z
+		.union([z.literal("Category"), z.literal("Region"), z.literal("Country")])
+		.optional(),
+	value: z.string().optional(),
+	columns: z
+		.array(
+			z.union([
+				z.literal("Category"),
+				z.literal("Region"),
+				z.literal("Country"),
+			]),
+		)
+		.optional(),
+});
+
+export type Regions = z.infer<typeof RegionsSchema>;
+
+export type RegionsQuery = z.infer<typeof RegionsQuerySchema>;

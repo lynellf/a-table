@@ -3,6 +3,8 @@ import { Application, Router } from "@oak/oak";
 import { oakCors } from "@tajpouria/cors";
 import { generateMock } from "@anatine/zod-mock";
 import sift from "npm:sift";
+import { aggregatedData } from "./aggregatedData.ts";
+import { RegionsQuerySchema } from "../src/schemas.ts";
 
 const router = new Router();
 
@@ -106,6 +108,66 @@ router.post("/api/search", async (context) => {
 			data: queryResp,
 			total_count: queryResp.length,
 		};
+	} catch (error) {
+		context.response.status = 400;
+
+		if (error instanceof z.ZodError) {
+			context.response.body = "Invalid request arguments";
+		} else {
+			context.response.body = (error as Error).message;
+		}
+	}
+});
+
+type TAggItem = Record<string, string | number> & { totalCount: number };
+
+router.post("/api/regions", async (context) => {
+	try {
+		const rawPayload = await context.request.body.json();
+		const { columns, column, value } = RegionsQuerySchema.parse(rawPayload);
+
+		if (!column && columns?.length) {
+			context.response.body = aggregatedData.map((item) => {
+				const result: TAggItem = {
+					totalCount: item.totalCount,
+				};
+
+				for (const col of columns) {
+					result[col] = item[col];
+				}
+
+				return result;
+			});
+
+			return;
+		}
+
+		if (column && value && columns?.length) {
+			context.response.body = aggregatedData
+				.filter((item) => item[column] === value)
+				.map((item) => {
+					const result: TAggItem = {
+						totalCount: item.totalCount,
+					};
+
+					for (const col of columns) {
+						result[col] = item[col];
+					}
+
+					return result;
+				});
+
+			return;
+		}
+
+		if (column && value) {
+			context.response.body = aggregatedData.filter(
+				(item) => item[column] === value,
+			);
+			return;
+		}
+
+		context.response.body = aggregatedData;
 	} catch (error) {
 		context.response.status = 400;
 
